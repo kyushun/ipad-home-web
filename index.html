@@ -89,10 +89,15 @@
     <div id="home"></div>
     <div class="copyright">&copy;2020 kyushun</div>
     <script>
+      const config = {
+        appCount: 6 * 3,
+        enterAnimateDelay: 0.4
+      };
+
       (() => {
         const appCount =
           Number(new URLSearchParams(window.location.search).get("app")) ||
-          6 * 3;
+          config.appCount;
         let appOpened = false;
 
         class Coord {
@@ -102,7 +107,7 @@
           }
 
           getDistance(dest) {
-            return (dest.x - this.x) ** 2 + (dest.y - this.y) ** 2;
+            return Math.sqrt((dest.x - this.x) ** 2 + (dest.y - this.y) ** 2);
           }
 
           getCloserPoint(points) {
@@ -170,6 +175,7 @@
               ? window.outerWidth
               : window.outerHeight;
 
+          let baseDistance;
           let fragment = document.createDocumentFragment();
           for (let i = 0; i < appCount; i++) {
             const el = document.createElement("div");
@@ -181,6 +187,11 @@
           fragment = document.createDocumentFragment();
           for (const app of document.getElementsByClassName("app")) {
             const appPos = app.getCenterCoord();
+            if (!baseDistance)
+              baseDistance = document
+                .getElementsByClassName("app")[0]
+                .getCenterCoord()
+                .getDistance(homePos);
 
             const intersections = getIntersectionsOfCircleWithLine(
               homePos,
@@ -198,7 +209,8 @@
               "style",
               `transform: matrix(1, 0, 0, 1, ${moveTo.x}, ${moveTo.y});
               transition-delay:
-               ${(appPos.getDistance(homePos) / radius ** 2) * 7}s;`
+               ${(appPos.getDistance(homePos) / baseDistance) *
+                 config.enterAnimateDelay}s;`
             );
             fragment.appendChild(el);
           }
