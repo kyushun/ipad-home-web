@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>iPad Home Web</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        min-height: 650px;
+      }
+
+      body {
+        width: 980px;
+        margin: 0 auto;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-image: url("./ipad-wall.jpg");
+        background-size: cover;
+      }
+
+      #home {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        width: 100%;
+        height: calc(130px * 5);
+        transition: transform 0.5s;
+      }
+      #home.scale-down {
+        transform: matrix(0.8, 0, 0, 0.8, 0, 0);
+      }
+
+      .app {
+        position: relative;
+        margin: 30px;
+        width: 100px;
+        height: 100px;
+        border-radius: 25px;
+        background-color: white;
+        transition: transform 1s;
+        overflow: hidden;
+      }
+      .app::after {
+        position: absolute;
+        z-index: 0;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        content: "";
+        opacity: 1;
+        background-image: url("./icon-grid.png");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+        transition: opacity 0.15s ease-in;
+      }
+      .app.clone {
+        position: absolute;
+        margin: 0;
+        transition: all 0.5s;
+      }
+      .app.open {
+        top: 0 !important;
+        left: 0 !important;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+      }
+      .app.open::after {
+        opacity: 0;
+      }
+
+      .copyright {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
+        color: white;
+        font-size: 0.75rem;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="home"></div>
+    <div class="copyright">&copy;2020 kyushun</div>
+    <script>
+      (() => {
+        const appCount =
+          Number(new URLSearchParams(window.location.search).get("app")) ||
+          6 * 3;
+        let appOpened = false;
+
+        class Coord {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+          }
+
+          getDistance(dest) {
+            return (dest.x - this.x) ** 2 + (dest.y - this.y) ** 2;
+          }
+
+          getCloserPoint(points) {
+            let closer = points[0];
+            for (let i = 0; i < points.length; i++) {
+              if (this.getDistance(points[i]) < this.getDistance(closer))
+                closer = points[i];
+            }
+            return closer;
+          }
+
+          move(x, y) {
+            this.x += x;
+            this.y += y;
+            return this;
+          }
+        }
+
+        Element.prototype.getCenterCoord = function() {
+          const rect = this.getBoundingClientRect();
+          return new Coord(
+            rect.left + window.pageXOffset + this.clientWidth / 2,
+            rect.top + window.pageYOffset + this.clientHeight / 2
+          );
+        };
+
+        const getIntersectionsOfCircleWithLine = (
+          pointA,
+          pointB,
+          circle,
+          radius
+        ) => {
+          const a = pointB.y - pointA.y;
+          const b = pointA.x - pointB.x;
+          const c = -(a * pointA.x + b * pointA.y);
+
+          const l = Math.sqrt(
+            (pointB.x - pointA.x) ** 2 + (pointB.y - pointA.y) ** 2
+          );
+          const eX = (pointB.x - pointA.x) / l;
+          const eY = (pointB.y - pointA.y) / l;
+          const vX = -eY;
+          const vY = eX;
+          const k = -(a * circle.x + b * circle.y + c) / (a * vX + b * vY);
+          const pX = circle.x + k * vX;
+          const pY = circle.y + k * vY;
+
+          if (radius < k) {
+            return null;
+          } else {
+            const S = Math.sqrt(radius ** 2 - k ** 2);
+            return [
+              new Coord(pX + S * eX, pY + S * eY),
+              new Coord(pX - S * eX, pY - S * eY)
+            ];
+          }
+        };
+
+        const initApps = () => {
+          const home = document.getElementById("home");
+          const homePos = home.getCenterCoord();
+
+          const radius =
+            window.outerWidth > window.outerHeight
+              ? window.outerWidth
+              : window.outerHeight;
+
+          let fragment = document.createDocumentFragment();
+          for (let i = 0; i < appCount; i++) {
+            const el = document.createElement("div");
+            el.className = "app";
+            fragment.appendChild(el);
+          }
+          home.appendChild(fragment);
+
+          fragment = document.createDocumentFragment();
+          for (const app of document.getElementsByClassName("app")) {
+            const appPos = app.getCenterCoord();
+
+            const intersections = getIntersectionsOfCircleWithLine(
+              homePos,
+              appPos,
+              homePos,
+              radius
+            );
+            const moveTo = appPos
+              .getCloserPoint(intersections)
+              .move(-appPos.x, -appPos.y);
+
+            const el = document.createElement("div");
+            el.className = "app";
+            el.setAttribute(
+              "style",
+              `transform: matrix(1, 0, 0, 1, ${moveTo.x}, ${moveTo.y});
+              transition-delay:
+               ${(appPos.getDistance(homePos) / radius ** 2) * 7}s;`
+            );
+            fragment.appendChild(el);
+          }
+          home.innerHTML = "";
+          home.appendChild(fragment);
+        };
+
+        const showApps = () => {
+          for (const app of document.getElementsByClassName("app")) {
+            app.style.transform = "";
+          }
+        };
+
+        const openApp = e => {
+          const clone = e.target.cloneNode(true);
+          clone.classList.add("clone");
+
+          const srcRect = e.target.getBoundingClientRect();
+          const cloned = document
+            .getElementsByTagName("body")[0]
+            .appendChild(clone);
+          cloned.setAttribute(
+            "style",
+            `top: ${srcRect.top + window.pageYOffset}px;
+              left: ${srcRect.left + window.pageXOffset}px`
+          );
+          requestAnimationFrame(() => {
+            cloned.classList.add("open");
+            document.getElementById("home").classList.add("scale-down");
+            appOpened = true;
+          });
+        };
+
+        const closeApp = e => {
+          requestAnimationFrame(() => {
+            const clone = document.getElementsByClassName("clone")[0];
+            clone.classList.remove("open");
+            document.getElementById("home").classList.remove("scale-down");
+            appOpened = false;
+            setTimeout(() => {
+              clone.parentNode.removeChild(clone);
+            }, 600);
+          });
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+          initApps();
+          requestAnimationFrame(showApps);
+
+          document.onkeydown = e => {
+            if (appOpened && e.keyCode == 27) {
+              closeApp();
+            }
+          };
+          const apps = document.getElementsByClassName("app");
+          for (const app of apps) {
+            app.onclick = openApp;
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
